@@ -37,6 +37,9 @@ dependencies:
   firebase_core: ^1.19.1
   firebase_auth: ^3.4.1
   cloud_firestore: ^3.2.1
+  geocoding: ^2.0.4
+  google_maps_flutter: ^2.1.10
+  geolocator: ^9.0.1
 
 dev_dependencies:
   flutter_test:
@@ -67,6 +70,8 @@ flutter:
   assets:
     - imagens/logo.png
     - imagens/fundo.png
+    - imagens/motorista.png
+    - imagens/passageiro.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
