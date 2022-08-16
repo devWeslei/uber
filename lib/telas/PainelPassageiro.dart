@@ -5,9 +5,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:uber/model/Requisicao.dart';
+import 'package:uber/util/UsuarioFirebase.dart';
 import 'dart:io';
-
 import '../model/Destino.dart';
+import '../model/Usuario.dart';
+import '../util/StatusRequisicao.dart';
 
 class PainelPassageiro extends StatefulWidget {
   const PainelPassageiro({Key? key}) : super(key: key);
@@ -144,7 +147,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
                     onPressed: () {
 
                       //salvar requisicao
-                      //_salvarRequisicao();
+                      _salvarRequisicao( destino );
 
                       Navigator.pop(context);
                     },
@@ -153,11 +156,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
               );
             }
         );
-
       }
-
-
-
     }else{
 
     }
@@ -187,6 +186,29 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
       });
 
     });
+
+  }
+
+  _salvarRequisicao( Destino destino) async {
+
+    /*
+    + requisicao
+       + ID_REQUISICAO
+          + destino (rua, endereço, latitude...)
+          + passageiro (nome, email ...)
+          + motorista (aguardando, a caminho...finalizada)
+     */
+
+    Usuario passageiro = await UsuarioFirebase.getDadosUsuarioLogado();
+
+    Requisicao requisicao = Requisicao();
+    requisicao.destino = destino;
+    requisicao.passageiro = passageiro;
+    requisicao.status = StatusRequisicao.AGUARDANDO;
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    db.collection("requisicoes")
+    .add( requisicao.toMap() );
 
   }
 
