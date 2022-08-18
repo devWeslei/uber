@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uber/util/StatusRequisicao.dart';
+import 'package:uber/util/UsuarioFirebase.dart';
 import 'dart:io';
+
+import '../model/Usuario.dart';
 
 class Corrida extends StatefulWidget {
 
-  final String? idRequisicao;
+  final String idRequisicao;
   const Corrida(this.idRequisicao, {Key? key}) : super(key: key);
 
   @override
@@ -21,8 +24,10 @@ class _CorridaState extends State<Corrida> {
 
   Completer<GoogleMapController> _controller = Completer();
   Set<Marker> _marcadores = {};
+  Map<String, dynamic>? _dadosRequisicao;
   CameraPosition _posicaoCamera = CameraPosition(target: LatLng(-23.42087200129373, -51.93719096900213),
     zoom: 18,);
+  Position? _localMotorista;
 
   //Controles para exibição na tela
   String _textoBotao = "Aceitar corrida";
@@ -56,6 +61,7 @@ class _CorridaState extends State<Corrida> {
         );
 
         _movimentarCamera(_posicaoCamera);
+        _localMotorista = position;
       }
     });
   }
@@ -87,6 +93,9 @@ class _CorridaState extends State<Corrida> {
         );
       });
       _movimentarCamera(_posicaoCamera);
+      setState(() {
+        _localMotorista = position;
+      });
     });
   }
   _exibirMarcadoresPassageiro(Position local) async {
@@ -115,10 +124,116 @@ class _CorridaState extends State<Corrida> {
 
   }
 
+  _recuperarRequisicao() async {
+
+    String idRequisicao = widget.idRequisicao;
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    DocumentSnapshot documentSnapshot = await db
+        .collection("requisicoes")
+        .doc( idRequisicao )
+        .get();
+
+    _dadosRequisicao = documentSnapshot.data() as Map<String,dynamic>;
+    _adicionarListenerRequisicao();
+
+  }
+
+  _adicionarListenerRequisicao() async {
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    String idRequisicao = _dadosRequisicao?["id"];
+    await db.collection("requisicoes")
+    .doc( idRequisicao ).snapshots().listen((snapshot) {
+
+      if( snapshot.data() != null ){
+
+        Map<String,dynamic> dados = snapshot.data() as Map<String,dynamic>;
+        String status = dados["status"];
+
+        switch( status ){
+          case StatusRequisicao.AGUARDANDO :
+            _statusAguardando();
+            break;
+          case StatusRequisicao.A_CAMINHO :
+            _statusACaminho();
+            break;
+          case StatusRequisicao.VIAGEM :
+
+            break;
+          case StatusRequisicao.FINALIZADA :
+
+            break;
+
+        }
+
+      }
+
+    });
+
+  }
+
+  _statusAguardando(){
+    _alterarBotaoPrincipal(
+        "Aceitar corrida",
+        Color(0xff1ebbd8),
+            (){
+          _aceitarCorrida();
+        }
+    );
+  }
+
+  _statusACaminho(){
+    _alterarBotaoPrincipal(
+        "A caminho do passageiro",
+        Colors.grey,
+        (){},
+    );
+  }
+
+  _aceitarCorrida() async {
+    //Recuperar dados do motorista
+    Usuario motorista   = await UsuarioFirebase.getDadosUsuarioLogado();
+    motorista.latitude  = _localMotorista?.latitude;
+    motorista.longitude = _localMotorista?.longitude;
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    String idRequisicao = _dadosRequisicao?["id"];
+    
+    db.collection("requisicoes")
+    .doc( idRequisicao )
+    .update({
+      "motorista" : motorista.toMap(),
+      "status" : StatusRequisicao.A_CAMINHO,
+    }).then((_){
+
+      //atualiza requisicao ativa
+      String? idPassageiro = _dadosRequisicao?["passageiro"]["idUsuario"];
+      db.collection("requisicao_ativa")
+        .doc( idPassageiro ).update({
+        "status" : StatusRequisicao.A_CAMINHO,
+      });
+
+      //Salvar requisicao ativa para motorista
+      String? idMotorista = motorista.idUsuario;
+      db.collection("requisicao_ativa_motorista")
+          .doc( idMotorista )
+          .set({
+        "id_requisicao" : idRequisicao,
+        "id_usuario" : idMotorista,
+        "status" : StatusRequisicao.A_CAMINHO,
+      });
+    });
+  }
+
   @override
   void initState() {
     _recuperarUltimaLocalizacaoConhecida();
     _adicionarListenerLocalizacao();
+
+    //Recuperar requisicao e
+    //adicionar listener para mudança de status
+    _recuperarRequisicao();
     super.initState();
   }
 
