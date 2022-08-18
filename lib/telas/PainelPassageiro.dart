@@ -24,6 +24,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
   TextEditingController _controllerDestino = TextEditingController(text: "av. tiradentes, 380 - Maringa PR");
   Completer<GoogleMapController> _controller = Completer();
   Set<Marker> _marcadores = {};
+  String _idRequisicao = "";
 
   //Controles para exibição na tela
   bool _exibirCaixaEnderecoDestino = true;
@@ -264,9 +265,20 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     );
   }
 
-  _cancelarUber(){
+  _cancelarUber() async{
 
-
+    User firebaseUser = await UsuarioFirebase.getUsuarioAtual();
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    db.collection("requisicoes")
+    .doc(_idRequisicao)
+    .update({
+      "status" : StatusRequisicao.CANCELADA
+    }).then((_) {
+      
+      db.collection("requisicao_ativa")
+          .doc( firebaseUser.uid)
+          .delete();
+    });
 
   }
 
@@ -291,7 +303,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
 
         Map<String, dynamic> dados = snapshot.data()!;
         String status = dados["status"];
-        String idRequisicao = dados["id_requisicao"];
+        _idRequisicao = dados["id_requisicao"];
 
         switch( status ){
           case StatusRequisicao.AGUARDANDO :
