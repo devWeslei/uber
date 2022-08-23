@@ -63,7 +63,7 @@ class _PainelMotoristaState extends State<PainelMotorista> {
         .collection("requisicao_ativa_motorista")
         .doc( user.uid ).get();
 
-    Map<String,dynamic> dadosRequisicao = documentSnapshot.data() as Map<String,dynamic>;
+    Map<String,dynamic>? dadosRequisicao = documentSnapshot.data() as Map<String,dynamic>?;
 
     if(dadosRequisicao == null){
       _adicionarListenerRequisicoes();

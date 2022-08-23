@@ -24,7 +24,9 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
   TextEditingController _controllerDestino = TextEditingController(text: "av. tiradentes, 380 - Maringa PR");
   Completer<GoogleMapController> _controller = Completer();
   Set<Marker> _marcadores = {};
-  String _idRequisicao = "";
+  String? _idRequisicao;
+  Position? _localPassageiro;
+  Map<String, dynamic>? _dadosRequisicao;
 
   //Controles para exibição na tela
   bool _exibirCaixaEnderecoDestino = true;
@@ -48,14 +50,6 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     setState(() {
       if (position != null) {
 
-        _exibirMarcadoresPassageiro( position );
-
-        _posicaoCamera = CameraPosition(
-          target: LatLng(position.latitude, position.longitude),
-          zoom: 18,
-        );
-
-        _movimentarCamera(_posicaoCamera);
       }
     });
   }
@@ -78,16 +72,26 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
         Geolocator.getPositionStream(locationSettings: locationSetings)
             .listen((Position position) {
 
-          _exibirMarcadoresPassageiro( position );
+          if(_idRequisicao != null ){
 
-      setState(() {
-        _posicaoCamera = CameraPosition(
-          target: LatLng(position.latitude, position.longitude),
-          zoom: 18,
-        );
-      });
-      _movimentarCamera(_posicaoCamera);
+            //Atualiza local do passageiro
+          UsuarioFirebase.atualizarDadosLocalizacao(
+              _idRequisicao!,
+              position.latitude,
+              position.longitude,
+              "passageiro"
+          );
+
+          }else if( position != null ){
+            setState(() {
+              _localPassageiro = position;
+            });
+          }
+
+
+
     });
+
   }
 
   List<String> itensMenu = ["Configurações", "Deslogar"];
@@ -203,10 +207,13 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
        + ID_REQUISICAO
           + destino (rua, endereço, latitude...)
           + passageiro (nome, email ...)
-          + motorista (aguardando, a caminho...finalizada)
+          + motorista (nome, email ...)
+          + status (aguardando, a caminho...finalizada)
      */
 
     Usuario passageiro = await UsuarioFirebase.getDadosUsuarioLogado();
+    passageiro.latitude = _localPassageiro?.latitude;
+    passageiro.longitude = _localPassageiro?.longitude;
 
     Requisicao requisicao = Requisicao();
     requisicao.destino = destino;
@@ -230,6 +237,9 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     .doc(passageiro.idUsuario )
     .set(dadosRequisicaoAtiva);
 
+    //chama método para alterar interface para o status aguardando
+    _statusAguardando();
+
   }
 
   _alterarBotaoPrincipal(String texto, Color cor, Function funcao){
@@ -242,7 +252,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
 
   }
 
-  _statusUberNaoChamado(){
+  _statusUberNaoChamado() async {
 
     _exibirCaixaEnderecoDestino = true;
     _alterarBotaoPrincipal(
@@ -250,11 +260,20 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
         Color(0xff1ebbd8),
         (){
           _chamarUber();
-        }
-    );
+        });
+
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    _exibirMarcadoresPassageiro( position );
+      CameraPosition cameraPosition = CameraPosition(
+        target: LatLng(position.latitude, position.longitude),
+        zoom: 18,
+      );
+    _movimentarCamera(cameraPosition);
   }
 
-  _statusAguardando(){
+  _statusAguardando() async {
     _exibirCaixaEnderecoDestino = false;
     _alterarBotaoPrincipal(
         "Cancelar",
@@ -263,6 +282,18 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
           _cancelarUber();
         }
     );
+
+    // double passageiroLat = _dadosRequisicao?["passageiro"]["latitude"];
+    // double passageiroLon = _dadosRequisicao?["passageiro"]["longitude"];
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    _exibirMarcadoresPassageiro( position );
+    CameraPosition cameraPosition = CameraPosition(
+      target: LatLng(position.latitude, position.longitude),
+      zoom: 18,
+    );
+    _movimentarCamera(cameraPosition);
   }
 
   _statusACaminho(){
@@ -289,32 +320,49 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
       db.collection("requisicao_ativa")
           .doc( firebaseUser.uid)
           .delete();
+
+      _statusUberNaoChamado();
+
     });
 
   }
 
-  _adicionarListenerRequisicaoAtiva() async{
+  _recuperarRequisicaoAtiva() async{
 
     User firebaseUser = await UsuarioFirebase.getUsuarioAtual();
 
     FirebaseFirestore db = FirebaseFirestore.instance;
-    await db.collection("requisicao_ativa")
+    DocumentSnapshot documentSnapshot = await db.collection("requisicao_ativa")
             .doc(firebaseUser.uid)
-            .snapshots()
-            .listen((snapshot) {
+            .get();
 
-              //print("dados recuperados: ${snapshot.data().toString()}");
-            /*
-                Caso tenha uma requisicao ativa
-                  -> altera interface de acordo com status
-                Caso nao tenha
-                  -> Exibe interface padrao para chamar uber
-             */
+    if(documentSnapshot.data() != null){
+
+      Map<String, dynamic> dados = documentSnapshot.data() as Map<String, dynamic>;
+      _idRequisicao = dados["id_requisicao"];
+
+      _adicionarListenerRequisicao(_idRequisicao!);
+
+    }else{
+
+      _statusUberNaoChamado();
+
+    }
+
+  }
+
+  _adicionarListenerRequisicao( String idRequisicao ) async {
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    await db.collection("requisicoes")
+        .doc( idRequisicao ).snapshots().listen((snapshot) {
+
       if( snapshot.data() != null ){
 
-        Map<String, dynamic> dados = snapshot.data()!;
-        String status = dados["status"];
-        _idRequisicao = dados["id_requisicao"];
+        Map<String, dynamic>? dados = snapshot.data() as Map<String, dynamic>?;
+        _dadosRequisicao = dados;
+        String status = dados?["status"];
+        _idRequisicao = dados?["id"];
 
         switch( status ){
           case StatusRequisicao.AGUARDANDO :
@@ -332,23 +380,21 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
 
         }
 
-      }else{
-
-        _statusUberNaoChamado();
-
       }
 
     });
+
   }
 
   @override
   void initState() {
     super.initState();
-    _recuperarUltimaLocalizacaoConhecida();
+    //adicionar listener para requisicao ativa
+    _recuperarRequisicaoAtiva();
+
+    //_recuperarUltimaLocalizacaoConhecida();
     _adicionarListenerLocalizacao();
 
-    //adicionar listener para requisicao ativa
-    _adicionarListenerRequisicaoAtiva();
   }
 
   @override
