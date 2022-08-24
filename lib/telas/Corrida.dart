@@ -169,6 +169,9 @@ class _CorridaState extends State<Corrida> {
           case StatusRequisicao.FINALIZADA :
             _statusFinalizada();
             break;
+          case StatusRequisicao.CONFIRMADA :
+            _statusConfirmada();
+            break;
 
         }
 
@@ -379,9 +382,50 @@ class _CorridaState extends State<Corrida> {
       },
     );
 
+    _marcadores = {};
+
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    _exibirMarcador( position,
+        "imagens/destino.png",
+        "Destino"
+    );
+
+    //setState(() {
+    CameraPosition cameraPosition = CameraPosition(
+      target: LatLng(position.latitude, position.longitude),
+      zoom: 18,
+    );
+    // });
+    _movimentarCamera(cameraPosition);
+
+  }
+
+  _statusConfirmada(){
+
+    Navigator.pushReplacementNamed(context, "/painel-motorista");
+
   }
 
   _confirmarCorrida(){
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    db.collection("requisicoes")
+        .doc( _idRequisicao )
+        .update({
+      "status" : StatusRequisicao.CONFIRMADA
+    });
+
+    String idPassageiro = _dadosRequisicao!["passageiro"]["idUsuario"];
+    db.collection("requisicao_ativa")
+        .doc( idPassageiro)
+        .delete();
+
+    String idMotorista = _dadosRequisicao!["motorista"]["idUsuario"];
+    db.collection("requisicao_ativa_motorista")
+        .doc( idMotorista)
+        .delete();
 
   }
 

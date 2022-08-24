@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:uber/model/Requisicao.dart';
 import 'package:uber/util/UsuarioFirebase.dart';
 import 'dart:io';
@@ -370,6 +371,114 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
 
   }
 
+  _statusFinalizada() async {
+
+    //Calcula valor da corrida
+    double latitudeDestino = _dadosRequisicao!["destino"]["latitude"];
+    double longitudeDestino = _dadosRequisicao!["destino"]["longitude"];
+
+    double latitudeOrigem = _dadosRequisicao!["origem"]["latitude"];
+    double longitudeOrigem = _dadosRequisicao!["origem"]["longitude"];
+
+    //para calcular um valor mais exato basta consumir uma API do google
+    // que calcula a distanciaconsiderando as ruas do percurso.
+    double distanciaEmMetros = Geolocator.distanceBetween(
+        latitudeOrigem,
+        longitudeOrigem,
+        latitudeDestino,
+        longitudeDestino
+    );
+
+    //converte para KM
+    double distanciaKM = distanciaEmMetros / 1000;
+    double valorViagem = distanciaKM * 8;
+
+    //8 é o valor cobrado por KM
+    var f = NumberFormat('#,##0.00', 'pt_BR');
+    var valorViagemFormatado = f.format( valorViagem );
+
+    _alterarBotaoPrincipal(
+      "Total - R\$ $valorViagemFormatado",
+      Colors.green,
+          (){},
+    );
+
+
+
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    _exibirMarcador( position,
+        "imagens/destino.png",
+        "Destino"
+    );
+
+    //setState(() {
+    CameraPosition cameraPosition = CameraPosition(
+      target: LatLng(position.latitude, position.longitude),
+      zoom: 18,
+    );
+    // });
+    _movimentarCamera(cameraPosition);
+
+  }
+
+  _statusConfirmada() async {
+
+    if(_streamSubscriptionRequisicoes != null){
+      _streamSubscriptionRequisicoes!.cancel();
+      _streamSubscriptionRequisicoes = null;
+    }
+
+    _exibirCaixaEnderecoDestino = true;
+
+    _alterarBotaoPrincipal(
+        "Chamar uber",
+        Color(0xff1ebbd8),
+            (){
+          _chamarUber();
+        });
+
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    _exibirMarcadoresPassageiro( position );
+    CameraPosition cameraPosition = CameraPosition(
+      target: LatLng(position.latitude, position.longitude),
+      zoom: 18,
+    );
+    _movimentarCamera(cameraPosition);
+
+    _dadosRequisicao = {};
+
+  }
+
+  _exibirMarcador(Position local, String icone, String infoWindow) async {
+
+    double pixelRatio = MediaQuery.of(context).devicePixelRatio;
+
+    BitmapDescriptor.fromAssetImage(
+        ImageConfiguration(devicePixelRatio: pixelRatio),
+        icone
+    ).then((BitmapDescriptor bitmapDescriptor){
+
+      Marker marcador = Marker(
+          markerId: MarkerId(icone),
+          position: LatLng(local.latitude, local.longitude),
+          infoWindow: InfoWindow(
+              title: infoWindow
+          ),
+          icon: bitmapDescriptor
+      );
+
+      setState(() {
+        _marcadores.add(marcador);
+      });
+
+    });
+
+  }
+
   _exibirDoisMArcadores( Marcador marcadorOrigem, Marcador marcadorDestino ){
 
     double pixelRatio = MediaQuery.of(context).devicePixelRatio;
@@ -482,6 +591,11 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
 
       _statusUberNaoChamado();
 
+      if(_streamSubscriptionRequisicoes != null){
+        _streamSubscriptionRequisicoes!.cancel();
+        _streamSubscriptionRequisicoes = null;
+      }
+
     });
 
   }
@@ -534,7 +648,10 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
             _statusEmViagem();
             break;
           case StatusRequisicao.FINALIZADA :
-
+            _statusFinalizada();
+            break;
+          case StatusRequisicao.CONFIRMADA :
+            _statusConfirmada();
             break;
 
         }
@@ -685,6 +802,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
   void dispose() {
     super.dispose();
     _streamSubscriptionRequisicoes?.cancel();
+    _streamSubscriptionRequisicoes = null;
   }
 
 }
