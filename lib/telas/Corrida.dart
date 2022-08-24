@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:uber/util/StatusRequisicao.dart';
 import 'package:uber/util/UsuarioFirebase.dart';
 import 'dart:io';
@@ -166,7 +167,7 @@ class _CorridaState extends State<Corrida> {
             _statusEmViagem();
             break;
           case StatusRequisicao.FINALIZADA :
-
+            _statusFinalizada();
             break;
 
         }
@@ -322,6 +323,65 @@ class _CorridaState extends State<Corrida> {
   }
 
   _finalizarCorrida(){
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+    db.collection("requisicoes")
+    .doc( _idRequisicao )
+    .update({
+      "status" : StatusRequisicao.FINALIZADA
+    });
+
+    String idPassageiro = _dadosRequisicao!["passageiro"]["idUsuario"];
+    db.collection("requisicao_ativa")
+        .doc( idPassageiro)
+        .update({"status" : StatusRequisicao.FINALIZADA});
+
+    String idMotorista = _dadosRequisicao!["motorista"]["idUsuario"];
+    db.collection("requisicao_ativa_motorista")
+        .doc( idMotorista)
+        .update({"status" : StatusRequisicao.FINALIZADA});
+
+  }
+
+  _statusFinalizada() async {
+
+    //Calcula valor da corrida
+    double latitudeDestino = _dadosRequisicao!["destino"]["latitude"];
+    double longitudeDestino = _dadosRequisicao!["destino"]["longitude"];
+
+    double latitudeOrigem = _dadosRequisicao!["origem"]["latitude"];
+    double longitudeOrigem = _dadosRequisicao!["origem"]["longitude"];
+
+    //para calcular um valor mais exato basta consumir uma API do google
+    // que calcula a distanciaconsiderando as ruas do percurso.
+    double distanciaEmMetros = Geolocator.distanceBetween(
+        latitudeOrigem,
+        longitudeOrigem,
+        latitudeDestino,
+        longitudeDestino
+    );
+
+    //converte para KM
+    double distanciaKM = distanciaEmMetros / 1000;
+    double valorViagem = distanciaKM * 8;
+
+    //8 é o valor cobrado por KM
+    var f = NumberFormat('#,##0.00', 'pt_BR');
+    var valorViagemFormatado = f.format( valorViagem );
+
+
+    _mensagemStatus = "Viagem finalizada";
+    _alterarBotaoPrincipal(
+      "Confirmar - R\$ $valorViagemFormatado",
+      Color(0xff1ebbd8),
+          (){
+        _confirmarCorrida();
+      },
+    );
+
+  }
+
+  _confirmarCorrida(){
 
   }
 
