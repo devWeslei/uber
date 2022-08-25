@@ -76,7 +76,6 @@ class _CorridaState extends State<Corrida> {
     var locationSetings =
     LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10);
 
-    var geolocator =
     Geolocator.getPositionStream(locationSettings: locationSetings)
         .listen((Position? position) {
 
@@ -93,14 +92,15 @@ class _CorridaState extends State<Corrida> {
                     "motorista"
                 );
 
-              }else{//aguardando
-                setState(() {
-                  _localMotorista = position;
-                });
-                _statusAguardando();
               }
             }
           }
+          else{//aguardando
+            setState(() {
+              _localMotorista = position;
+            });
+            _statusAguardando();
+         }
     });
   }
 
@@ -182,42 +182,59 @@ class _CorridaState extends State<Corrida> {
   }
 
   _statusAguardando() async {
-    _alterarBotaoPrincipal(
-        "Aceitar corrida",
-        Color(0xff1ebbd8),
-            (){
-          _aceitarCorrida();
+
+    FirebaseFirestore db = FirebaseFirestore.instance;
+
+    db.collection("requisicoes")
+        .doc( _idRequisicao )
+        .snapshots().listen((snapshot) async {
+      if (snapshot.data() != null) {
+        Map<String, dynamic>? dados = snapshot.data();
+        _statusRequisicao = dados?["status"];
+
+        switch (_statusRequisicao) {
+          case StatusRequisicao.AGUARDANDO :
+            _alterarBotaoPrincipal(
+                "Aceitar corrida",
+                Color(0xff1ebbd8),
+                    (){
+                  _aceitarCorrida();
+                }
+            );
+
+           // if(_localMotorista != null) {
+
+              double? motoristaLat = _localMotorista?.latitude;
+              double? motoristaLon = _localMotorista?.longitude;
+
+              Position position = await Geolocator.getCurrentPosition(
+                  desiredAccuracy: LocationAccuracy.high);
+
+              setState(() {
+                _exibirMarcador( position,
+                    "imagens/motorista.png",
+                    "motorista"
+                );
+              });
+
+              CameraPosition cameraPosition = CameraPosition(
+                target: LatLng(position.latitude, position.longitude),
+                zoom: 18,
+              );
+
+              _movimentarCamera(cameraPosition);
+
+            //}
+            break;
+          case StatusRequisicao.CANCELADA :
+                Navigator.pushReplacementNamed(context, "/painel-motorista");
+            break;
         }
-    );
-
-    if(_localMotorista != null) {
-
-      double? motoristaLat = _localMotorista?.latitude;
-      double? motoristaLon = _localMotorista?.longitude;
-      // Position position = Position(
-      //   latitude: motoristaLat ,longitude: motoristaLon, timestamp: null, accuracy: null, altitude: null, speed: null, heading: null, speedAccuracy: null,
-      // );
-      Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-
-      _exibirMarcador( position,
-          "imagens/motorista.png",
-          "motorista"
-      );
-
-      //setState(() {
-      CameraPosition cameraPosition = CameraPosition(
-        target: LatLng(position.latitude, position.longitude),
-        zoom: 18,
-      );
-      // });
-      _movimentarCamera(cameraPosition);
-
-    }
-
+      }
+    });
   }
 
-  _statusACaminho(){
+  _statusACaminho() async {
 
     _mensagemStatus = "A caminho do passageiro";
     _alterarBotaoPrincipal(
@@ -228,25 +245,24 @@ class _CorridaState extends State<Corrida> {
         },
     );
 
-    double latitudeDestino = _dadosRequisicao!["passageiro"]["latitude"];
-    double longitudeDestino = _dadosRequisicao!["passageiro"]["longitude"];
+    double latitudePassageiro = _dadosRequisicao!["passageiro"]["latitude"];
+    double longitudePassageiro = _dadosRequisicao!["passageiro"]["longitude"];
+    double latitudeMotorista = _dadosRequisicao!["motorista"]["latitude"];
+    double longitudeMotorista = _dadosRequisicao!["motorista"]["longitude"];
 
-    double latitudeOrigem = _dadosRequisicao!["motorista"]["latitude"];
-    double longitudeOrigem = _dadosRequisicao!["motorista"]["longitude"];
-
-    Marcador marcadorOrigem = Marcador(
-        LatLng(latitudeOrigem, longitudeOrigem),
+    Marcador marcadorMotorista = Marcador(
+        LatLng(latitudeMotorista, longitudeMotorista),
         "imagens/motorista.png",
         "local motorista"
     );
 
-    Marcador marcadorDestino = Marcador(
-        LatLng(latitudeDestino, longitudeDestino),
+    Marcador marcadorPassageiro = Marcador(
+        LatLng(latitudePassageiro, longitudePassageiro),
         "imagens/passageiro.png",
         "local destino"
     );
 
-    _exibirCentralizarDoisMarcadores(marcadorOrigem, marcadorDestino);
+    _exibirCentralizarDoisMarcadores(marcadorMotorista, marcadorPassageiro);
   }
 
   _statusEmViagem(){
@@ -514,8 +530,12 @@ class _CorridaState extends State<Corrida> {
   _aceitarCorrida() async {
     //Recuperar dados do motorista
     Usuario motorista   = await UsuarioFirebase.getDadosUsuarioLogado();
-    motorista.latitude  = _localMotorista?.latitude;
-    motorista.longitude = _localMotorista?.longitude;
+
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+
+    motorista.latitude  = position.latitude;
+    motorista.longitude = position.longitude;
 
     FirebaseFirestore db = FirebaseFirestore.instance;
     String idRequisicao = _dadosRequisicao!["id"];
@@ -544,6 +564,7 @@ class _CorridaState extends State<Corrida> {
         "status" : StatusRequisicao.A_CAMINHO,
       });
     });
+
   }
 
   @override

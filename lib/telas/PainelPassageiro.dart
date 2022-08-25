@@ -47,14 +47,19 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
   }
 
   _recuperarUltimaLocalizacaoConhecida() async {
-    Position position = await Geolocator.getCurrentPosition(
+    Position? position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
 
-    setState(() {
-      if (position != null) {
+    if (position != null) {
+      setState(() {
+        _exibirMarcadorPassageiro(position);
 
-      }
-    });
+        _posicaoCamera = CameraPosition(
+            target: LatLng(position.latitude, position.longitude), zoom: 19);
+        _localPassageiro = position;
+        _movimentarCamera(_posicaoCamera);
+      });
+    }
   }
 
   _movimentarCamera(CameraPosition cameraPosition) async {
@@ -71,11 +76,10 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     var locationSetings =
         LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10);
 
-    var geolocator =
         Geolocator.getPositionStream(locationSettings: locationSetings)
             .listen((Position position) {
 
-          if(_idRequisicao != null ){
+          if(_idRequisicao != null &&  _idRequisicao!.isNotEmpty ){
 
             //Atualiza local do passageiro
           UsuarioFirebase.atualizarDadosLocalizacao(
@@ -100,11 +104,11 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
 
   List<String> itensMenu = ["Configurações", "Deslogar"];
 
-  _deslogarUsuario() async {
+  _deslogarUsuario()  {
     FirebaseAuth auth = FirebaseAuth.instance;
 
-    await auth.signOut();
-    Navigator.pushReplacementNamed(context, "/");
+    auth.signOut();
+    Navigator.pushNamedAndRemoveUntil(context, "/",(_)=> false);
   }
 
   _escolhaMenuItem(String escolha) {
@@ -178,7 +182,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
 
   }
 
-  _exibirMarcadoresPassageiro(Position local) async {
+  _exibirMarcadorPassageiro(Position local) async {
 
     double pixelRatio = MediaQuery.of(context).devicePixelRatio;
 
@@ -268,21 +272,17 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
           _chamarUber();
         });
 
-    if(_localPassageiro != null ){
-
+    //if(_localPassageiro != null ){
       Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
 
-      _exibirMarcadoresPassageiro( position );
+      _exibirMarcadorPassageiro( position );
       CameraPosition cameraPosition = CameraPosition(
         target: LatLng(position.latitude, position.longitude),
         zoom: 18,
       );
       _movimentarCamera(cameraPosition);
-
-    }
-
-
+    //}
   }
 
   _statusAguardando() async {
@@ -300,7 +300,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
 
-    _exibirMarcadoresPassageiro( position );
+    _exibirMarcadorPassageiro( position );
     CameraPosition cameraPosition = CameraPosition(
       target: LatLng(position.latitude, position.longitude),
       zoom: 18,
@@ -314,24 +314,24 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
         "Motorista a caminho",
         Colors.grey,
             (){
-
         }
     );
 
-    double latitudeDestino = _dadosRequisicao!["passageiro"]["latitude"];
-    double longitudeDestino = _dadosRequisicao!["passageiro"]["longitude"];
+    double latitudePassageiro = _dadosRequisicao?["passageiro"]["latitude"];
+    double longitudePassageiro = _dadosRequisicao?["passageiro"]["longitude"];
 
-    double latitudeOrigem = _dadosRequisicao!["motorista"]["latitude"];
-    double longitudeOrigem = _dadosRequisicao!["motorista"]["longitude"];
+
+    double latitudeMotorista = _dadosRequisicao?["motorista"]["latitude"];
+    double longitudeMotorista = _dadosRequisicao?["motorista"]["longitude"];
 
     Marcador marcadorOrigem = Marcador(
-        LatLng(latitudeOrigem, longitudeOrigem),
+        LatLng(latitudeMotorista, longitudeMotorista),
         "imagens/motorista.png",
         "local motorista"
     );
 
     Marcador marcadorDestino = Marcador(
-        LatLng(latitudeDestino, longitudeDestino),
+        LatLng(latitudePassageiro, longitudePassageiro),
         "imagens/passageiro.png",
         "local destino"
     );
@@ -442,7 +442,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
 
-    _exibirMarcadoresPassageiro( position );
+    _exibirMarcadorPassageiro( position );
     CameraPosition cameraPosition = CameraPosition(
       target: LatLng(position.latitude, position.longitude),
       zoom: 18,
@@ -450,6 +450,8 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     _movimentarCamera(cameraPosition);
 
     _dadosRequisicao = {};
+
+    _adicionarListenerLocalizacao();
 
   }
 
@@ -653,11 +655,8 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
           case StatusRequisicao.CONFIRMADA :
             _statusConfirmada();
             break;
-
         }
-
       }
-
     });
 
   }
@@ -665,11 +664,14 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
   @override
   void initState() {
     super.initState();
+    //_recuperarUltimaLocalizacaoConhecida();
+    _adicionarListenerLocalizacao();
+    _recuperarUltimaLocalizacaoConhecida();
+
     //adicionar listener para requisicao ativa
     _recuperarRequisicaoAtiva();
 
-    //_recuperarUltimaLocalizacaoConhecida();
-    _adicionarListenerLocalizacao();
+
 
   }
 
@@ -803,6 +805,7 @@ class _PainelPassageiroState extends State<PainelPassageiro> {
     super.dispose();
     _streamSubscriptionRequisicoes?.cancel();
     _streamSubscriptionRequisicoes = null;
+
   }
 
 }

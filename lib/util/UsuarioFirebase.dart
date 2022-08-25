@@ -23,7 +23,7 @@ class UsuarioFirebase {
     .doc( idUsuario )
     .get();
 
-    dynamic dados = snapshot.data();
+    Map<String, dynamic> dados = snapshot.data() as Map<String, dynamic>;
 
     String tipoUsuario = dados["tipoUsuario"];
     String email = dados["email"];
