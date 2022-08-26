@@ -17,6 +17,7 @@ class _HomeState extends State<Home> {
   bool _carregando = false;
 
   _validarCampos() {
+    _mensagemErro = "";
     //recuperar dados dos campos
     String email = _controllerEmail.text;
     String senha = _controllerSenha.text;
@@ -58,8 +59,13 @@ class _HomeState extends State<Home> {
       _redirecionaPainelPorTipoUsuario( firebaseUser.user!.uid );
        })
         .catchError((error) {
-      _mensagemErro =
-          "Erro ao autenticar o usuário, verifique e-mail e senha e tente novamente!";
+
+          setState(() {
+            _carregando = false;
+            _mensagemErro =
+            "Erro ao autenticar o usuário, verifique e-mail e senha e tente novamente!";
+          });
+
     });
   }
 
