@@ -2,7 +2,7 @@
 
 ## Screens
 <p align="center">
-  <img alt="Demo" src="https://github.com/devWeslei/uber/blob/main/imagens/demo%20photo.png" min-width="480px" max-width="80px" width="480px">
+  <img alt="Demo" src="https://github.com/devWeslei/uber/blob/main/imagens/demo%20photo.png" min-width="480px" max-width="480px" width="480px">
 </p>
 
 ## Running   
